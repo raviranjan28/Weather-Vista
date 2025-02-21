@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weather Vista</title>
+  <style>
+    /* Full-page gradient background */
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    /* Glassmorphism container */
+    .weather-app {
+      width: 400px;
+      padding: 2rem;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+    }
+
+    .weather-app h1 {
+      margin-bottom: 1.5rem;
+      font-size: 2rem;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Search section */
+    .search {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+
+    .search input {
+      flex: 1;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .search input::placeholder {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .search button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.3);
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .search button:hover {
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    /* Weather cards */
+    .weather-card {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 15px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+
+    .weather-card h2 {
+      margin-top: 0;
+      font-size: 1.5rem;
+      color: white;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .weather-icon {
+      font-size: 4rem;
+      margin: 1rem 0;
+      filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+    }
+
+    .weather-card p {
+      margin: 10px 0;
+      font-size: 1.1rem;
+      color: white;
+    }
+
+    /* Error message */
+    #error-message {
+      color: #ff6b6b;
+      font-weight: bold;
+      margin-top: 1rem;
+    }
+
+    /* Temperature styling */
+    .temperature {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #ffd700;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Wind styling */
+    .wind {
+      color: #a8edea;
+    }
+
+    /* Weather description */
+    .description {
+      color: #f4d03f;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="weather-app">
+    <h1>Weather Vista</h1>
+    <div class="search">
+      <input type="text" id="location-input" placeholder="Enter a location" />
+      <button id="search-btn">Search</button>
+    </div>
+    <div id="current-weather" class="weather-card" style="display:none;">
+      <h2>Current Weather</h2>
+      <div class="weather-icon" id="weather-icon">⛅</div>
+      <p id="current-temp" class="temperature"></p>
+      <p id="current-wind" class="wind"></p>
+      <p id="current-description" class="description"></p>
+    </div>
+    <div id="next-day" class="weather-card" style="display:none;">
+      <h2>Next Day Forecast</h2>
+      <p id="next-temp" class="temperature"></p>
+      <p id="next-wind" class="wind"></p>
+    </div>
+    <div id="error-message"></div>
+  </div>
+
+  <script>
+    // Weather icons mapping
+    const weatherIcons = {
+      clear: "☀️",
+      cloudy: "☁️",
+      rain: "🌧️",
+      snow: "❄️",
+      thunderstorm: "⛈️",
+      fog: "🌫️",
+      drizzle: "🌦️",
+      unknown: "🌈"
+    };
+
+    // Convert location name to coordinates using Nominatim (OpenStreetMap)
+    function getCoordinates(location) {
+      const geocodeUrl = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(location);
+      return fetch(geocodeUrl)
+        .then(response => response.json())
+        .then(data => {
+          if (data && data.length > 0) {
+            return {
+              latitude: data[0].lat,
+              longitude: data[0].lon
+            };
+          } else {
+            throw new Error('Location not found');
+          }
+        });
+    }
+
+    document.getElementById('search-btn').addEventListener('click', () => {
+      const location = document.getElementById('location-input').value;
+      document.getElementById('error-message').innerText = "";
+      if (location) {
+        getCoordinates(location)
+          .then(coords => {
+            getWeather(coords.latitude, coords.longitude);
+          })
+          .catch(error => {
+            document.getElementById('error-message').innerText = error.message;
+          });
+      }
+    });
+
+    // Fetch weather data from Open-Meteo API
+    function getWeather(latitude, longitude) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,wind_speed_10m_max&timezone=auto`;
+      
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          displayWeather(data);
+        })
+        .catch(error => {
+          console.error('Error fetching weather data:', error);
+          document.getElementById('error-message').innerText = 'Error retrieving weather data.';
+        });
+    }
+
+    // Display the fetched weather data on the interface
+    function displayWeather(data) {
+      // Display current weather details
+      if (data.current_weather) {
+        const current = data.current_weather;
+        document.getElementById('current-temp').innerHTML = `${current.temperature} °C`;
+        document.getElementById('current-wind').innerHTML = `<strong>Wind Speed:</strong> ${current.windspeed} m/s`;
+        document.getElementById('current-description').innerHTML = `<strong>Weather:</strong> ${getWeatherDescription(current.weathercode)}`;
+        document.getElementById('weather-icon').textContent = getWeatherIcon(current.weathercode);
+        document.getElementById('current-weather').style.display = 'block';
+      } else {
+        document.getElementById('current-weather').style.display = 'none';
+      }
+      
+      // Display next day forecast using daily forecast data
+      if (data.daily && data.daily.temperature_2m_max && data.daily.temperature_2m_min && data.daily.wind_speed_10m_max) {
+        // Index 0 represents today; next day is index 1
+        if(data.daily.time && data.daily.time.length > 1) {
+          const nextDayIndex = 1;
+          const maxTemp = data.daily.temperature_2m_max[nextDayIndex];
+          const minTemp = data.daily.temperature_2m_min[nextDayIndex];
+          const windSpeedMax = data.daily.wind_speed_10m_max[nextDayIndex];
+          
+          document.getElementById('next-temp').innerHTML = `${minTemp} °C - ${maxTemp} °C`;
+          document.getElementById('next-wind').innerHTML = `<strong>Max Wind Speed:</strong> ${windSpeedMax} m/s`;
+          document.getElementById('next-day').style.display = 'block';
+        } else {
+          document.getElementById('next-day').style.display = 'none';
+        }
+      } else {
+        document.getElementById('next-day').style.display = 'none';
+      }
+    }
+
+    // Helper function to convert weather codes to human-readable descriptions
+    function getWeatherDescription(code) {
+      const descriptions = {
+        0: 'Clear sky',
+        1: 'Mainly clear',
+        2: 'Partly cloudy',
+        3: 'Overcast',
+        45: 'Fog',
+        48: 'Depositing rime fog',
+        51: 'Light drizzle',
+        53: 'Moderate drizzle',
+        55: 'Dense drizzle',
+        56: 'Light freezing drizzle',
+        57: 'Dense freezing drizzle',
+        61: 'Slight rain',
+        63: 'Moderate rain',
+        65: 'Heavy rain',
+        66: 'Light freezing rain',
+        67: 'Heavy freezing rain',
+        71: 'Slight snow fall',
+        73: 'Moderate snow fall',
+        75: 'Heavy snow fall',
+        77: 'Snow grains',
+        80: 'Slight rain showers',
+        81: 'Moderate rain showers',
+        82: 'Violent rain showers',
+        85: 'Slight snow showers',
+        86: 'Heavy snow showers',
+        95: 'Thunderstorm',
+        96: 'Thunderstorm with slight hail',
+        99: 'Thunderstorm with heavy hail'
+      };
+      return descriptions[code] || 'Unknown weather';
+    }
+
+    // Helper function to get weather icon based on weather code
+    function getWeatherIcon(code) {
+      if (code === 0) return weatherIcons.clear;
+      if (code >= 1 && code <= 3) return weatherIcons.cloudy;
+      if (code >= 51 && code <= 67) return weatherIcons.rain;
+      if (code >= 71 && code <= 86) return weatherIcons.snow;
+      if (code >= 95 && code <= 99) return weatherIcons.thunderstorm;
+      if (code === 45 || code === 48) return weatherIcons.fog;
+      return weatherIcons.unknown;
+    }
+  </script>
+</body>
+</html>
